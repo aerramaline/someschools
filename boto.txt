@@ -1,0 +1,81 @@
+import logging
+import boto3
+from botocore.exceptions import ClientError
+
+
+def create_bucket(bucket_name, region=None):
+    """Create an S3 bucket in a specified region
+    If a region is not specified, the bucket is created in the S3 default
+    region (us-east-1).
+    :param bucket_name: Bucket to create
+    :param region: String region to create bucket in, e.g., 'us-west-2'
+    :return: True if bucket created, else False
+    """
+
+    # Create bucket
+    try:
+        if region is None:
+            s3_client = boto3.client('s3')
+            s3_client.create_bucket(Bucket=bucket_name)
+        else:
+            s3_client = boto3.client('s3', region_name=region)
+            location = {'LocationConstraint': region}
+            s3_client.create_bucket(Bucket=bucket_name,
+                                    CreateBucketConfiguration=location)
+    except ClientError as e:
+        logging.error(e)
+        return False
+    return True
+
+# Retrieve the list of existing buckets
+s3 = boto3.client('s3')
+response = s3.list_buckets()
+
+# Output the bucket names
+print('Existing buckets:')
+for bucket in response['Buckets']:
+    print(f'  {bucket["Name"]}')
+
+import boto3
+from botocore.exceptions import ClientError
+
+
+def get_secret():
+    secret_name = "MySecretName"
+    region_name = "us-west-2"
+
+    session = boto3.session.Session()
+    client = session.client(
+        service_name='secretsmanager',
+        region_name=region_name,
+    )
+
+    try:
+        get_secret_value_response = client.get_secret_value(
+            SecretId=secret_name
+        )
+    except ClientError as e:
+        if e.response['Error']['Code'] == 'ResourceNotFoundException':
+            print("The requested secret " + secret_name + " was not found")
+        elif e.response['Error']['Code'] == 'InvalidRequestException':
+            print("The request was invalid due to:", e)
+        elif e.response['Error']['Code'] == 'InvalidParameterException':
+            print("The request had invalid params:", e)
+        elif e.response['Error']['Code'] == 'DecryptionFailure':
+            print("The requested secret can't be decrypted using the provided KMS key:", e)
+        elif e.response['Error']['Code'] == 'InternalServiceError':
+            print("An error occurred on service side:", e)
+    else:
+        # Secrets Manager decrypts the secret value using the associated KMS CMK
+        # Depending on whether the secret was a string or binary, only one of these fields will be populated
+        if 'SecretString' in get_secret_value_response:
+            text_secret_data = get_secret_value_response['SecretString']
+        else:
+            binary_secret_data = get_secret_value_response['SecretBinary']
+
+        # Your code goes here.
+
+import boto3
+
+s3 = boto3.client('s3')
+s3.download_file('BUCKET_NAME', 'OBJECT_NAME', 'FILE_NAME')
