@@ -1,0 +1,144 @@
+import math
+import pandas as pd
+import copy
+import matplotlib.pyplot as plt
+from prettytable import PrettyTable
+from prettytable import MARKDOWN
+from numpy.random import normal
+import numpy as np
+import matplotlib
+
+df.sort_values(by=["uid"], inplace=True)
+
+# Here, we get the unique trajectories
+unique_uids = df.drop_duplicates(["uid"])
+unique_uids = unique_uids["uid"].to_list()
+
+class Point:
+    R = 6371 # Radius of the earth
+    def __init__(self, latitude, longitude, t):
+        self.latitude = latitude
+        self.longitude = longitude
+        self.t = t
+        
+    def __str__(self):
+        return "Point({},{},{})".format(self.latitude, self.longitude, self.t)
+    
+    def getDistance(self, point2):
+        delta_lambda = math.radians(point2.latitude - self.latitude)
+        delta_phi = math.radians(point2.longitude - self.longitude)
+        a = math.sin(delta_lambda / 2) * math.sin(delta_lambda / 2) + math.cos(math.radians(self.latitude)) \
+        * math.cos(math.radians(point2.latitude)) * math.sin(delta_phi / 2) * math.sin(delta_phi / 2)
+        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+        distance = Point.R * c
+        return distance
+
+class Trajectory:
+    def __init__(self, points = []):
+        self.points = points
+        
+    def addNoise(self, mu, sigma):
+        return Trajectory([Point(i.latitude + normal(mu, sigma), i.longitude + normal(mu, sigma), i.t) for i in self.points])
+	
+	# Then, we split the trajectories
+points = []
+trajectories = []
+for i in range(len(unique_uids)):
+#for i in range(1):
+    tmp_df = df.loc[df["uid"]==unique_uids[i]]
+    len(tmp_df)
+    for j in range(len(tmp_df)):
+        points.append(Point(tmp_df.iloc[j][0], tmp_df.iloc[j][1], tmp_df.iloc[j][2]))
+    trajectories.append(copy.deepcopy(points))
+    points.clear()
+    
+len(trajectories)
+
+P = Trajectory(trajectories[0])
+
+Q = P.addNoise(0, 0.0005)
+
+len(P.points)
+
+start = 0
+limit = 1000
+sampleTraj1 = [[i.latitude for i in P.points[start:limit]], [i.longitude for i in P.points[start:limit]]]
+sampleTraj2 = [[i.latitude for i in Q.points[start:limit]], [i.longitude for i in Q.points[start:limit]]]
+traj1 = pd.DataFrame(sampleTraj1).transpose()
+traj2 = pd.DataFrame(sampleTraj2).transpose()
+traj1.columns = traj2.columns = ["latitude", "longitude"]
+
+f, (ax1, ax2) = plt.subplots(1, 2, sharey=True, figsize=(15, 5))
+ax1.scatter(traj1.latitude, traj1.longitude, zorder=1)
+ax1.set_title('Sample of trajectory 1')
+
+ax2.scatter(traj2.latitude, traj2.longitude, zorder=1)
+ax2.set_title('Sample of trajectory 2')
+
+plt.show()
+
+plt.scatter(traj1.latitude, traj1.longitude)
+plt.scatter(traj2.latitude, traj2.longitude)
+plt.show()
+
+len(traj1)
+
+len(Q.points)
+
+Q.points=Q.points[1:1001]
+P.points=P.points[1:1001]
+
+# This code generates the distance matrix in a markdown format
+row = []
+x = PrettyTable()
+x.set_style(MARKDOWN)
+x.header = False
+for i in Q.points[0:10]:
+    for j in P.points[0:10]:
+        row.append(round(i.getDistance(j), 2))
+    x.add_row(row)
+    row = []
+print(x.get_html_string())
+
+row = []
+matrix = []
+for i in Q.points:
+    for j in P.points:
+        row.append(round(i.getDistance(j), 2))
+    matrix.append(row)
+    row = []
+
+m = np.array(matrix)
+print(m.shape)
+
+def warping_path(D):
+    n = D.shape[0] - 1
+    m = D.shape[1] - 1
+    P = [(n, m)]
+    while n > 0 or m > 0:
+        if n == 0:
+            min_val = (0, m - 1)
+        elif m == 0:
+            min_val = (n - 1, 0)
+        else:
+            val = min(D[n-1, m-1], D[n-1, m], D[n, m-1])
+            if val == D[n-1, m-1]:
+                min_val = (n-1, m-1)
+            elif val == D[n-1, m]:
+                min_val = (n-1, m)
+            else:
+                min_val = (n, m-1)
+        P.append(min_val)
+        (n, m) = min_val
+    P.reverse()
+    return np.array(P)
+        
+P = warping_path(np.array(matrix))
+print('Indexes of the most optimal warping path P =', P.tolist())
+
+plt.figure(figsize=(25, 10))
+plt.imshow(matrix, cmap='gray_r', origin='lower', aspect='equal', vmin=0, vmax=1, interpolation='nearest')
+plt.clim([0, np.max(matrix)])
+plt.plot(P[:, 1], P[:, 0], marker='o', color='r')
+#plt.title("Illustration of the optimal warping path")
+
