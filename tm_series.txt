@@ -1,0 +1,86 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import warnings
+warnings.filterwarnings('ignore')
+%matplotlib inline
+pd.set_option('display.max_columns', 500)
+
+from sklearn.preprocessing import StandardScaler
+x_calls = data_fix.columns[1:]
+scaller = StandardScaler()
+matrix = pd.DataFrame(scaller.fit_transform(data_fix[x_calls]),columns=x_calls)
+matrix['Meter ID'] = data_fix['Meter ID']
+print(matrix.head())
+
+def plot_BIC(matrix,x_calls,K):
+    from sklearn import mixture
+    BIC=[]
+    for k in K:
+        model=mixture.GaussianMixture(n_components=k,init_params='kmeans')
+        model.fit(matrix[x_calls])
+        BIC.append(model.bic(matrix[x_calls]))
+    fig, ax = plt.subplots(figsize=(8, 6))
+    plt.plot(K,BIC,'-cx')
+    plt.ylabel("BIC score")
+    plt.xlabel("k")
+    plt.title("BIC scoring for K-means cell's behaviour")
+    return(BIC)
+	
+
+K = range(2,31)
+BIC = plot_BIC(matrix,x_calls,K)
+
+from sklearn.cluster import KMeans
+from sklearn.decomposition import PCA
+from mpl_toolkits.mplot3d import Axes3D
+cluster = KMeans(n_clusters=5,random_state=217)
+matrix['cluster'] = cluster.fit_predict(matrix[x_calls])
+print(matrix.cluster.value_counts())
+d=pd.DataFrame(matrix.cluster.value_counts())
+fig, ax = plt.subplots(figsize=(8, 6))
+plt.bar(d.index,d['cluster'],align='center',alpha=0.5)
+plt.xlabel('Cluster')
+plt.ylabel('number of data')
+plt.title('Cluster of Data')
+from sklearn.metrics.pairwise import euclidean_distances
+distance = euclidean_distances(cluster.cluster_centers_, cluster.cluster_centers_)
+print(distance)
+
+
+# Reduction dimention of the data using PCA
+pca = PCA(n_components=3)
+matrix['x'] = pca.fit_transform(matrix[x_calls])[:,0]
+matrix['y'] = pca.fit_transform(matrix[x_calls])[:,1]
+matrix['z'] = pca.fit_transform(matrix[x_calls])[:,2]
+
+# Getting the center of each cluster for plotting
+cluster_centers = pca.transform(cluster.cluster_centers_)
+cluster_centers = pd.DataFrame(cluster_centers, columns=['x', 'y', 'z'])
+cluster_centers['cluster'] = range(0, len(cluster_centers))
+print(cluster_centers)
+# Plotting for 2-dimention
+fig, ax = plt.subplots(figsize=(8, 6))
+scatter=ax.scatter(matrix['x'],matrix['y'],c=matrix['cluster'],s=21,cmap=plt.cm.Set1_r)
+ax.scatter(cluster_centers['x'],cluster_centers['y'],s=70,c='blue',marker='+')
+ax.set_xlabel('x')
+ax.set_ylabel('y')
+plt.colorbar(scatter)
+plt.title('Data Segmentation')
+# Plotting for 3-Dimention
+fig, ax = plt.subplots(figsize=(8, 6))
+ax=fig.add_subplot(111, projection='3d')
+scatter=ax.scatter(matrix['x'],matrix['y'],matrix['z'],c=matrix['cluster'],s=21,cmap=plt.cm.Set1_r)
+ax.scatter(cluster_centers['x'],cluster_centers['y'],cluster_centers['z'],s=70,c='red',marker='+')
+ax.set_xlabel('x')
+ax.set_ylabel('y')
+ax.set_zlabel('z')
+plt.colorbar(scatter)
+plt.title('Data Segmentation')
+
+
+data_fix['cluster']=matrix['cluster']
+print(data_fix[data_fix.columns[1:]].groupby(['cluster']).agg([np.mean]))
+list(data_fix[data_fix.cluster==2]['Meter ID'])
+
+
